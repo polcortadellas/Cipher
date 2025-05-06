@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+import sys
+import math
+
+
+def print_help():
+    print("USAGE")
+    print("\t./103cipher message key flag\n")
+    print("DESCRIPTION")
+    print("\tmessage     a message, made of ASCII characters")
+    print("\tkey         the encryption key, made of ASCII characters")
+    print("\tflag        0 for the message to be encrypted, 1 to be decrypted")
+
+
+def parse_message_matrix(msg, matrix_size):
+    while len(msg) % matrix_size != 0:
+        msg += '\0'
+
+    matrix = []
+    for i in range(0, len(msg), matrix_size):
+        line = [ord(msg[j]) if j < len(msg)
+                else 0 for j in range(i, i + matrix_size)]
+        matrix.append(line)
+
+    return matrix
+
+
+def parse_key_matrix(key):
+    # smallest matrix size N such that N x N >= len(key)
+    size = math.ceil(math.sqrt(len(key)))
+    key_matrix = []
+
+    for i in range(size):
+        row = [ord(key[j + i * size]) if j + i * size <
+               len(key) else 0 for j in range(size)]
+        key_matrix.append(row)
+
+    return key_matrix
+
+
+def matrix_multiply(mat1, mat2):
+    rows_mat1 = len(mat1)
+    cols_mat1 = len(mat1[0])
+    rows_mat2 = len(mat2)
+    cols_mat2 = len(mat2[0])
+
+    if cols_mat1 != rows_mat2:
+        raise ValueError("Matrices cannot be multiplied (invalid dimensions)")
+
+    result = [[0 for _ in range(cols_mat2)] for _ in range(rows_mat1)]
+
+    for i in range(rows_mat1):
+        for j in range(cols_mat2):
+            for k in range(cols_mat1):
+                result[i][j] += mat1[i][k] * mat2[k][j]
+
+    return result
+
+
+def determinant(matrix):
+    size = len(matrix)
+    if size == 1:
+        return matrix[0][0]
+    if size == 2:
+        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+
+    det = 0
+    for col in range(size):
+        submatrix = [row[:col] + row[col+1:] for row in matrix[1:]]
+        det += ((-1) ** col) * matrix[0][col] * determinant(submatrix)
+
+    return det
+
+
+def adjugate_matrix(matrix):
+    size = len(matrix)
+    cofactors = [[0 for _ in range(size)] for _ in range(size)]
+
+    for row in range(size):
+        for col in range(size):
+            submatrix = [matrix[i][:col] + matrix[i][col+1:]
+                         for i in range(size) if i != row]
+            cofactors[row][col] = ((-1) ** (row + col)) * \
+                determinant(submatrix)
+
+    return cofactors
+
+
+def transpose(matrix):
+    size = len(matrix)
+    return [[matrix[j][i] for j in range(size)] for i in range(size)]
+
+
+def inverse_matrix(matrix):
+    det = determinant(matrix)
+    if det == 0:
+        raise ValueError("Matrix is not invertible")
+
+    adjugate = adjugate_matrix(matrix)
+    transposed_matrix = transpose(adjugate)
+    size = len(matrix)
+
+    inverse = [[transposed_matrix[row][col] /
+                det for col in range(size)] for row in range(size)]
+
+    print("Key matrix:")
+    for row in inverse:
+        print("\t".join(map(lambda x: f"{x:.3f}", row)))
+
+    return inverse
+
+
+def encrypt(msg, key):
+    key_matrix = parse_key_matrix(key)
+    matrix_size = len(key_matrix)
+    message_matrix = parse_message_matrix(msg, matrix_size)
+
+    encrypted_matrix = matrix_multiply(message_matrix, key_matrix)
+
+    print("Key matrix:")
+    for row in key_matrix:
+        print("\t".join(map(str, row)))
+
+    print("\nEncrypted message:")
+    encrypted_list = [num for row in encrypted_matrix for num in row]
+    print(" ".join(map(str, encrypted_list)))
+
+
+def decrypt(encrypted, key):
+    encrypted_list = list(map(int, encrypted.split()))
+    key_matrix = parse_key_matrix(key)
+    matrix_size = len(key_matrix)
+
+    encrypted_matrix = [encrypted_list[i:i+matrix_size]
+                        for i in range(0, len(encrypted_list), matrix_size)]
+
+    print(encrypted_matrix)
+    try:
+        if (matrix_size != 1):
+            inverse_key_matrix = inverse_matrix(key_matrix)
+        else:
+            inverse_key_matrix = [[1 / key_matrix[0][0]]]
+            print(1 / key_matrix[0][0])
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(84)
+
+    decrypted_matrix = matrix_multiply(encrypted_matrix, inverse_key_matrix)
+    decrypted_message = ""
+    for row in decrypted_matrix:
+        for num in row:
+            if num != 0:
+                decrypted_message += chr(round(num))
+
+    print("\nDecrypted message:")
+    print(decrypted_message.strip())
+
+
+def cipher103():
+    if len(sys.argv) == 2 and sys.argv[1] == "-h":
+        print_help()
+        sys.exit(0)
+
+    if len(sys.argv) != 4:
+        print("Error: Incorrect number of arguments")
+        sys.exit(84)
+
+    try:
+        flag = int(sys.argv[3])
+        if flag not in [0, 1]:
+            print("Error: Flag must be 0 or 1")
+            sys.exit(84)
+
+        if flag == 0:
+            encrypt(sys.argv[1], sys.argv[2])
+        else:
+            decrypt(sys.argv[1], sys.argv[2])
+
+    except ValueError:
+        print("Error: Flag must be an integer")
+        sys.exit(84)
+
+
+if __name__ == "__main__":
+    cipher103()
